@@ -15,6 +15,8 @@ const uploadsRoutes = require('./routes/uploads');
 const nutritionRoutes = require('./routes/nutrition');
 const medicinesRoutes = require('./routes/medicines');
 const faqsRoutes = require('./routes/faqs');
+const profileRoutes = require('./routes/profile');
+const waterRoutes = require('./routes/water');
 
 const app = express();
 
@@ -54,6 +56,8 @@ app.use('/api/uploads', uploadsRoutes);
 app.use('/api/nutrition', nutritionRoutes);
 app.use('/api/medicines', medicinesRoutes);
 app.use('/api/faqs', faqsRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/water', waterRoutes);
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 4000;

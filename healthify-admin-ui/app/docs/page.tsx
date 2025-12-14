@@ -6,11 +6,12 @@ const API_DOCS = [
   {
     group: "Auth",
     base: "/api/auth",
+    note: "⚠️ UPDATED: Login/Register responses now include 'profileCompleted' and 'name' in the user object. Check profileCompleted to determine if user needs to complete their profile.",
     endpoints: [
       {
         method: "POST",
         path: "/register",
-        description: "Register a new user.",
+        description: "Register a new user. Response includes profileCompleted: false (user needs to complete profile).",
         auth: "Public",
         body: {
           email: "string (required)",
@@ -20,7 +21,7 @@ const API_DOCS = [
       {
         method: "POST",
         path: "/login",
-        description: "Login with email and password.",
+        description: "Login with email and password. Check response user.profileCompleted to decide navigation.",
         auth: "Public",
         body: {
           email: "string (required)",
@@ -474,6 +475,127 @@ const API_DOCS = [
         description: "Upload an image to Cloudinary.",
         auth: "Admin",
         body: "multipart/form-data with field 'file' as the image binary.",
+      },
+    ],
+  },
+  {
+    group: "Profile (Mobile App)",
+    base: "/api/profile",
+    note: "All endpoints require Authorization: Bearer <JWT> (user token). These are for the mobile app's user profile features.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/",
+        description: "Get current user's full profile.",
+        auth: "User",
+      },
+      {
+        method: "POST",
+        path: "/complete",
+        description: "Complete profile after registration (initial setup). Required fields: name, age, gender, weight.",
+        auth: "User",
+        body: {
+          name: "string (required)",
+          age: "number (required, 1-150)",
+          gender: "string (required, 'male' | 'female' | 'other')",
+          weight: "number (required, in kg)",
+          height: "number (optional, in cm)",
+        },
+      },
+      {
+        method: "PUT",
+        path: "/",
+        description: "Update profile fields (partial update supported).",
+        auth: "User",
+        body: {
+          name: "string (optional)",
+          age: "number (optional)",
+          gender: "string (optional)",
+          weight: "number (optional)",
+          height: "number (optional)",
+          profileImage: "string URL (optional)",
+        },
+      },
+      {
+        method: "PUT",
+        path: "/image",
+        description: "Update profile image URL only.",
+        auth: "User",
+        body: {
+          profileImage: "string URL (required)",
+        },
+      },
+      {
+        method: "GET",
+        path: "/status",
+        description: "Check if user has completed profile setup (lightweight check).",
+        auth: "User",
+      },
+    ],
+  },
+  {
+    group: "Water Tracking (Mobile App)",
+    base: "/api/water",
+    note: "All endpoints require Authorization: Bearer <JWT> (user token). Track daily water intake with goal setting and history for calendar/graph views.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/goal",
+        description: "Get user's daily water goal (number of glasses).",
+        auth: "User",
+      },
+      {
+        method: "PUT",
+        path: "/goal",
+        description: "Set user's daily water goal. This will also update today's log goal.",
+        auth: "User",
+        body: {
+          goal: "number (required, 1-20 glasses)",
+        },
+      },
+      {
+        method: "GET",
+        path: "/today",
+        description: "Get today's water intake progress. Returns count, goal, percentage, remaining glasses, and completion status.",
+        auth: "User",
+      },
+      {
+        method: "POST",
+        path: "/drink",
+        description: "Add one glass of water (+1). Call this when user taps to drink water.",
+        auth: "User",
+      },
+      {
+        method: "DELETE",
+        path: "/drink",
+        description: "Remove one glass of water (-1). In case user made a mistake.",
+        auth: "User",
+      },
+      {
+        method: "PUT",
+        path: "/today",
+        description: "Set today's water count to a specific value (for manual adjustment).",
+        auth: "User",
+        body: {
+          count: "number (required, 0 or greater)",
+        },
+      },
+      {
+        method: "GET",
+        path: "/history",
+        description: "Get water intake history for calendar/graph view. Returns daily data with summary stats.",
+        auth: "User",
+        query: {
+          days: "number (optional, default 30) - Get last N days",
+          startDate: "YYYY-MM-DD (optional) - Custom range start",
+          endDate: "YYYY-MM-DD (optional) - Custom range end",
+        },
+      },
+      {
+        method: "GET",
+        path: "/date/:date",
+        description: "Get water intake for a specific date. Date format: YYYY-MM-DD",
+        auth: "User",
       },
     ],
   },
