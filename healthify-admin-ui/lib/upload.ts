@@ -4,7 +4,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export interface UploadResult {
     url: string;
-    public_id: string;
+    key?: string;
+    public_id?: string; // Legacy support
+    storage?: string;
 }
 
 export async function uploadImage(file: File): Promise<UploadResult> {
