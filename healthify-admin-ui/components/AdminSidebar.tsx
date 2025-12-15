@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaUserShield, FaChartBar, FaRunning, FaDumbbell, FaEnvelopeOpenText, FaLeaf, FaPills, FaClock, FaQuestionCircle, FaList } from 'react-icons/fa';
+import { FaUserShield, FaChartBar, FaRunning, FaDumbbell, FaEnvelopeOpenText, FaLeaf, FaPills, FaClock, FaQuestionCircle, FaList, FaCalendarAlt, FaHeartbeat } from 'react-icons/fa';
 import { useAuth } from './AuthProvider'; // Use the local AuthProvider
 
 interface NavItem {
@@ -17,11 +17,13 @@ const navItems: NavItem[] = [
   { name: 'Exercise Categories', href: '/exercise-categories', icon: FaDumbbell },
   { name: 'Exercise Management', href: '/exercise-management', icon: FaRunning },
   { name: 'Workouts Bundle', href: '/workouts-bundle', icon: FaList },
+  { name: 'Exercise Programs', href: '/exercise-programs', icon: FaCalendarAlt },
   { name: 'Meditation Management', href: '/meditation-management', icon: FaEnvelopeOpenText },
   { name: 'Nutrition Management', href: '/nutrition-management', icon: FaLeaf },
   { name: 'Medicines Catalog', href: '/medicines-catalog', icon: FaPills },
   // { name: 'Medicine Reminders', href: '/medicine-reminders', icon: FaClock }, // Keeping this link simple for now
   { name: 'Questions', href: '/questions', icon: FaQuestionCircle },
+  { name: 'Health Assessment', href: '/health-assessment', icon: FaHeartbeat },
 ];
 
 export const AdminSidebar = () => {
@@ -40,8 +42,8 @@ export const AdminSidebar = () => {
               <Link
                 href={item.href}
                 className={`flex items-center p-3 rounded-lg text-sm font-medium transition-colors 
-                  ${pathname === item.href 
-                    ? 'bg-primary text-white shadow-md' 
+                  ${pathname === item.href
+                    ? 'bg-primary text-white shadow-md'
                     : 'text-gray-600 hover:bg-gray-100'
                   }`}
               >

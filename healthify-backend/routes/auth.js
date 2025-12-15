@@ -6,13 +6,19 @@ const { signToken } = require('../lib/jwt');
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, name } = req.body || {};
     if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
     const exists = await User.findOne({ email: email.toLowerCase() });
     if (exists) return res.status(400).json({ message: 'User already exists' });
 
-    const user = new User({ email, password });
+    // Create user with optional name field
+    const userData = { email, password };
+    if (name && name.trim()) {
+      userData.name = name.trim();
+    }
+    
+    const user = new User(userData);
     await user.save();
 
     const token = signToken({ id: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET, process.env.JWT_EXPIRES_IN);
@@ -20,8 +26,15 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       message: 'User created',
       token,
-      user: { id: user._id, email: user.email, role: user.role },
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name || '',
+        role: user.role,
+        profileCompleted: user.profileCompleted || false
+      },
     });
+
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ message: 'Internal server error' });
@@ -43,7 +56,13 @@ router.post('/login', async (req, res) => {
     res.status(200).json({
       message: 'Login successful',
       token,
-      user: { id: user._id, email: user.email, role: user.role },
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        name: user.name || '',
+        profileCompleted: user.profileCompleted || false
+      },
     });
   } catch (err) {
     console.error('Login error:', err);

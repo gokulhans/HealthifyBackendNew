@@ -19,11 +19,11 @@ export interface AuthResponse {
  */
 export async function apiFetch<T>(
     endpoint: string,
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' = 'GET',
     body?: object
 ): Promise<T> {
     const token = Cookies.get('healthify-admin-token');
-    
+
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
     };
@@ -39,7 +39,7 @@ export async function apiFetch<T>(
     };
 
     const url = `${API_BASE}${endpoint}`;
-    
+
     try {
         const response = await fetch(url, config);
         const data = await response.json();

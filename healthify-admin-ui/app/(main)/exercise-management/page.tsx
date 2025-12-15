@@ -1,10 +1,10 @@
 'use client';
- 
-import { useState, useEffect, useCallback } from 'react';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CrudLayout } from '@/components/CrudLayout';
 import { apiFetch } from '@/lib/api';
-import { uploadImage } from '@/lib/upload';
-import { FaEdit, FaTrashAlt, FaSpinner } from 'react-icons/fa';
+import { uploadImage, uploadVideo } from '@/lib/upload';
+import { FaEdit, FaTrashAlt, FaSpinner, FaCloudUploadAlt, FaVideo, FaImage } from 'react-icons/fa';
 
 interface CategoryOption {
     _id: string;
@@ -26,6 +26,7 @@ interface Exercise {
     duration: number;
     equipment: string[];
     image?: string;
+    video?: string;
     createdAt: string;
     category?: ExerciseCategoryRef | null;
 }
@@ -45,11 +46,13 @@ const ExerciseForm: React.FC<ExerciseFormProps> = ({ onSuccess, initialData, cat
         duration: initialData ? String(initialData.duration ?? '') : '',
         equipment: initialData?.equipment?.join(', ') || '',
         image: initialData?.image || '',
+        video: initialData?.video || '',
         category: initialData?.category?._id || '',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [uploading, setUploading] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [uploadingVideo, setUploadingVideo] = useState(false);
 
     const isEdit = !!initialData;
 
@@ -58,19 +61,27 @@ const ExerciseForm: React.FC<ExerciseFormProps> = ({ onSuccess, initialData, cat
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        setUploading(true);
         setError('');
+
         try {
-            const result = await uploadImage(file);
-            setFormData(prev => ({ ...prev, image: result.url }));
+            if (type === 'image') {
+                setUploadingImage(true);
+                const result = await uploadImage(file);
+                setFormData(prev => ({ ...prev, image: result.url }));
+            } else if (type === 'video') {
+                setUploadingVideo(true);
+                const result = await uploadVideo(file);
+                setFormData(prev => ({ ...prev, video: result.url }));
+            }
         } catch (err: any) {
-            setError(err.message || 'Image upload failed');
+            setError(err.message || `${type} upload failed`);
         } finally {
-            setUploading(false);
+            if (type === 'image') setUploadingImage(false);
+            if (type === 'video') setUploadingVideo(false);
         }
     };
 
@@ -89,6 +100,7 @@ const ExerciseForm: React.FC<ExerciseFormProps> = ({ onSuccess, initialData, cat
                 difficulty: formData.difficulty as Exercise['difficulty'],
                 duration: formData.duration ? Number(formData.duration) : undefined,
                 image: formData.image || undefined,
+                video: formData.video || undefined,
                 category: formData.category || undefined,
                 equipment: formData.equipment
                     .split(',')
@@ -109,128 +121,178 @@ const ExerciseForm: React.FC<ExerciseFormProps> = ({ onSuccess, initialData, cat
     };
 
     return (
-        <form onSubmit={handleSubmit}>
-            <h3 className="text-xl font-semibold mb-4 text-primary">{isEdit ? 'Edit Exercise' : 'Create New Exercise'}</h3>
+        <form onSubmit={handleSubmit} className="flex flex-col h-full" style={{ maxHeight: '80vh' }}>
+            <div className="flex-shrink-0 mb-5 border-b pb-4">
+                <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    {isEdit ? <FaEdit className="text-indigo-500" /> : <FaCloudUploadAlt className="text-green-500" />}
+                    {isEdit ? 'Edit Exercise' : 'Create New Exercise'}
+                </h3>
+                <p className="text-gray-500 text-sm mt-1">
+                    {isEdit ? 'Update details of your exercise below.' : 'Add a new exercise to your library.'}
+                </p>
+            </div>
 
-            {error && <p className="text-danger mb-4 p-2 bg-red-100 rounded">{error}</p>}
+            <div className="flex-grow overflow-y-auto pr-2 pb-4">
+                {error && (
+                    <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded shadow-sm">
+                        <p className="font-medium">Error</p>
+                        <p className="text-sm">{error}</p>
+                    </div>
+                )}
 
-            <div className="space-y-4">
-                <label className="block">
-                    <span className="text-gray-700">Title *</span>
-                    <input
-                        type="text"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleChange}
-                        required
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"
-                    />
-                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left Column: Basic Info */}
+                    <div className="space-y-4">
+                        <div className="form-group">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Title *</label>
+                            <input
+                                type="text"
+                                name="title"
+                                value={formData.title}
+                                onChange={handleChange}
+                                required
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2.5 bg-gray-50 focus:bg-white transition-colors"
+                                placeholder="e.g. Push Ups"
+                            />
+                        </div>
 
-                <label className="block">
-                    <span className="text-gray-700">Category</span>
-                    <select
-                        name="category"
-                        value={formData.category}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-white"
-                    >
-                        <option value="">Unassigned</option>
-                        {categories.map(cat => (
-                            <option key={cat._id} value={cat._id}>{cat.name}</option>
-                        ))}
-                    </select>
-                </label>
+                        <div className="form-group">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Category</label>
+                            <select
+                                name="category"
+                                value={formData.category}
+                                onChange={handleChange}
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2.5 bg-white"
+                            >
+                                <option value="">Select Category...</option>
+                                {categories.map(cat => (
+                                    <option key={cat._id} value={cat._id}>{cat.name}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                <label className="block">
-                    <span className="text-gray-700">Difficulty</span>
-                    <select
-                        name="difficulty"
-                        value={formData.difficulty}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-white"
-                    >
-                        <option value="beginner">Beginner</option>
-                        <option value="intermediate">Intermediate</option>
-                        <option value="advanced">Advanced</option>
-                    </select>
-                </label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="form-group">
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Difficulty</label>
+                                <select
+                                    name="difficulty"
+                                    value={formData.difficulty}
+                                    onChange={handleChange}
+                                    className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2.5 bg-white"
+                                >
+                                    <option value="beginner">Beginner</option>
+                                    <option value="intermediate">Intermediate</option>
+                                    <option value="advanced">Advanced</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Duration (min)</label>
+                                <input
+                                    type="number"
+                                    name="duration"
+                                    min={0}
+                                    value={formData.duration}
+                                    onChange={handleChange}
+                                    className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2.5 bg-gray-50 focus:bg-white"
+                                />
+                            </div>
+                        </div>
 
-                <label className="block">
-                    <span className="text-gray-700">Duration (minutes)</span>
-                    <input
-                        type="number"
-                        name="duration"
-                        min={0}
-                        value={formData.duration}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"
-                    />
-                </label>
+                        <div className="form-group">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Equipment</label>
+                            <input
+                                type="text"
+                                name="equipment"
+                                value={formData.equipment}
+                                onChange={handleChange}
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2.5 bg-gray-50 focus:bg-white"
+                                placeholder="e.g. dumbbells, mat"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Comma-separated list of items.</p>
+                        </div>
+                    </div>
 
-                <label className="block">
-                    <span className="text-gray-700">Equipment (comma-separated)</span>
-                    <input
-                        type="text"
-                        name="equipment"
-                        value={formData.equipment}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"
-                        placeholder="e.g. dumbbells, mat"
-                    />
-                </label>
+                    {/* Right Column: Media */}
+                    <div className="space-y-4">
+                        {/* Image Upload */}
+                        <div className="bg-gray-50 p-4 rounded-lg border border-dashed border-gray-300">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                <FaImage className="text-blue-500" /> Cover Image
+                            </label>
+                            <div className="flex gap-2 mb-2">
+                                <input
+                                    type="url"
+                                    name="image"
+                                    value={formData.image}
+                                    onChange={handleChange}
+                                    className="flex-1 text-sm border-gray-300 rounded-md py-1 px-2"
+                                    placeholder="Image URL..."
+                                />
+                                {formData.image && <a href={formData.image} target="_blank" className="text-blue-500 text-xs flex items-center hover:underline">View</a>}
+                            </div>
+                            <label className="cursor-pointer flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md transition text-sm">
+                                {uploadingImage ? <FaSpinner className="animate-spin mr-2" /> : <FaCloudUploadAlt className="mr-2" />}
+                                {uploadingImage ? 'Uploading...' : 'Upload Image'}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'image')} />
+                            </label>
+                        </div>
 
-                <label className="block">
-                    <span className="text-gray-700">Description</span>
+                        {/* Video Upload */}
+                        <div className="bg-gray-50 p-4 rounded-lg border border-dashed border-gray-300">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                <FaVideo className="text-red-500" /> Demo Video
+                            </label>
+                            <div className="flex gap-2 mb-2">
+                                <input
+                                    type="url"
+                                    name="video"
+                                    value={formData.video}
+                                    onChange={handleChange}
+                                    className="flex-1 text-sm border-gray-300 rounded-md py-1 px-2"
+                                    placeholder="Video URL..."
+                                />
+                            </div>
+                            <label className="cursor-pointer flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md transition text-sm">
+                                {uploadingVideo ? <FaSpinner className="animate-spin mr-2" /> : <FaCloudUploadAlt className="mr-2" />}
+                                {uploadingVideo ? 'Uploading...' : 'Upload Video'}
+                                <input type="file" accept="video/*" className="hidden" onChange={(e) => handleFileUpload(e, 'video')} />
+                            </label>
+                        </div>
+                        {formData.video && (
+                            <div className="mt-2">
+                                <video src={formData.video} controls className="w-full h-auto max-h-48 bg-black rounded" />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
                     <textarea
                         name="description"
                         value={formData.description}
                         onChange={handleChange}
-                        rows={3}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"
+                        rows={4}
+                        className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3 bg-gray-50 focus:bg-white transition-colors"
+                        placeholder="Detailed description of the exercise..."
                     ></textarea>
-                </label>
-
-                <label className="block">
-                    <span className="text-gray-700">Image URL</span>
-                    <input
-                        type="url"
-                        name="image"
-                        value={formData.image}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"
-                    />
-                    <div className="mt-2 flex items-center gap-3 text-sm">
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageFileChange}
-                            disabled={uploading}
-                            className="text-sm"
-                        />
-                        {uploading && (
-                            <span className="text-gray-500 flex items-center">
-                                <FaSpinner className="animate-spin inline mr-1" /> Uploading...
-                            </span>
-                        )}
-                    </div>
-                </label>
+                </div>
             </div>
 
-            <div className="mt-6 flex justify-end space-x-3">
+            <div className="flex-shrink-0 pt-4 border-t border-gray-200 mt-2 flex justify-end space-x-3 bg-white">
                 <button
                     type="button"
                     onClick={onClose}
-                    className="py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="py-2.5 px-5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
                 >
                     Cancel
                 </button>
                 <button
                     type="submit"
-                    disabled={loading}
-                    className="py-2 px-4 bg-primary text-white rounded-md font-semibold hover:bg-green-600 disabled:bg-gray-400 transition-colors"
+                    disabled={loading || uploadingImage || uploadingVideo}
+                    className="py-2.5 px-6 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center"
                 >
-                    {loading ? <FaSpinner className="animate-spin inline mr-2" /> : (isEdit ? 'Update Exercise' : 'Create Exercise')}
+                    {loading ? <FaSpinner className="animate-spin mr-2" /> : (isEdit ? 'Save Changes' : 'Create Exercise')}
                 </button>
             </div>
         </form>

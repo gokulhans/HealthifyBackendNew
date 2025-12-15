@@ -53,11 +53,13 @@ router.get('/:id', async (req, res) => {
 // POST /api/exercises (admin)
 router.post('/', protect, isAdmin, async (req, res) => {
   try {
-    const { title, category, description, difficulty, duration, equipment, image } = req.body || {};
-    if (!title) return res.status(400).json({ message: 'Title required' });
+    const { title, category, description, difficulty, duration, equipment, image, video } = req.body || {};
+    console.log('[Exercise POST] Request body:', { title, category, description, difficulty, duration, equipment: equipment?.length, image: !!image, video: !!video });
+
+    if (!title) return res.status(400).json({ message: 'Title is required' });
 
     const exists = await Exercise.findOne({ title: title.trim() });
-    if (exists) return res.status(400).json({ message: 'Exercise already exists' });
+    if (exists) return res.status(400).json({ message: `Exercise "${title}" already exists` });
 
     let cat = null;
     if (category) {
@@ -75,7 +77,8 @@ router.post('/', protect, isAdmin, async (req, res) => {
       difficulty: difficulty || 'beginner',
       duration: Number(duration) || 0,
       equipment: Array.isArray(equipment) ? equipment : (equipment ? [equipment] : []),
-      image: image || ''
+      image: image || '',
+      video: video || ''
     });
 
     await ex.save();
@@ -91,7 +94,7 @@ router.post('/', protect, isAdmin, async (req, res) => {
 // PUT /api/exercises/:id (admin)
 router.put('/:id', protect, isAdmin, async (req, res) => {
   try {
-    const { title, category, description, difficulty, duration, equipment, image } = req.body || {};
+    const { title, category, description, difficulty, duration, equipment, image, video } = req.body || {};
     const ex = await Exercise.findById(req.params.id);
     if (!ex) return res.status(404).json({ message: 'Exercise not found' });
 
@@ -113,6 +116,7 @@ router.put('/:id', protect, isAdmin, async (req, res) => {
     if (duration !== undefined) ex.duration = Number(duration) || 0;
     if (equipment !== undefined) ex.equipment = Array.isArray(equipment) ? equipment : (equipment ? [equipment] : []);
     if (image !== undefined) ex.image = image;
+    if (video !== undefined) ex.video = video;
 
     await ex.save();
     await ex.populate('category', 'name slug');
