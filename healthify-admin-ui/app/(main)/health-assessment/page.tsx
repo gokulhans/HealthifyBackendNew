@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { CrudLayout } from '@/components/CrudLayout';
-import { FaEdit, FaTrashAlt, FaSpinner, FaPlus, FaMinus } from 'react-icons/fa';
+import { FaEdit, FaTrashAlt, FaSpinner, FaPlus, FaMinus, FaChartBar, FaInfoCircle } from 'react-icons/fa';
 
 interface Question {
     _id: string;
@@ -11,7 +11,9 @@ interface Question {
     questionNumber: number;
     questionText: string;
     options: string[];
+    optionScores?: number[];
     order: number;
+    isActive?: boolean;
 }
 
 interface QuestionFormProps {
@@ -25,10 +27,14 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSuccess, initialData, onC
         category: initialData?.category || 'Body',
         questionText: initialData?.questionText || '',
         options: initialData?.options || ['', ''],
+        optionScores: initialData?.optionScores || [0, 0],
         order: initialData?.order?.toString() || '',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [showScores, setShowScores] = useState(
+        initialData?.optionScores && initialData.optionScores.some(s => s !== 0)
+    );
 
     const isEdit = !!initialData;
     const categories = ['Body', 'Mind', 'Nutrition', 'Lifestyle'];
@@ -43,14 +49,25 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSuccess, initialData, onC
         setFormData({ ...formData, options: newOptions });
     };
 
+    const handleScoreChange = (index: number, value: string) => {
+        const newScores = [...formData.optionScores];
+        newScores[index] = parseInt(value) || 0;
+        setFormData({ ...formData, optionScores: newScores });
+    };
+
     const addOption = () => {
-        setFormData({ ...formData, options: [...formData.options, ''] });
+        setFormData({
+            ...formData,
+            options: [...formData.options, ''],
+            optionScores: [...formData.optionScores, 0]
+        });
     };
 
     const removeOption = (index: number) => {
         if (formData.options.length <= 2) return;
         const newOptions = formData.options.filter((_, i) => i !== index);
-        setFormData({ ...formData, options: newOptions });
+        const newScores = formData.optionScores.filter((_, i) => i !== index);
+        setFormData({ ...formData, options: newOptions, optionScores: newScores });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -59,10 +76,14 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSuccess, initialData, onC
         setError('');
 
         try {
+            const validOptions = formData.options.filter(o => o.trim() !== '');
+            const validScores = formData.optionScores.slice(0, validOptions.length);
+
             const payload = {
                 category: formData.category,
                 questionText: formData.questionText,
-                options: formData.options.filter(o => o.trim() !== ''),
+                options: validOptions,
+                optionScores: showScores ? validScores : validOptions.map((_, i) => i), // Default: index-based scoring
                 order: Number(formData.order) || 0,
             };
 
@@ -109,21 +130,43 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSuccess, initialData, onC
 
             <div>
                 <label className="block text-sm font-medium text-gray-700">Question Text</label>
-                <input
-                    type="text"
+                <textarea
                     name="questionText"
                     value={formData.questionText}
                     onChange={handleChange}
                     required
+                    rows={2}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
                 />
             </div>
 
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Options</label>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">Options</label>
+                    <button
+                        type="button"
+                        onClick={() => setShowScores(!showScores)}
+                        className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${showScores ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                        <FaChartBar size={10} />
+                        {showScores ? 'Hide Scores' : 'Show Scores'}
+                    </button>
+                </div>
+
+                {showScores && (
+                    <div className="mb-3 p-2 bg-blue-50 rounded text-xs text-blue-700 flex items-start gap-2">
+                        <FaInfoCircle className="mt-0.5 flex-shrink-0" />
+                        <span>
+                            Assign scores to each option (0-10). Higher scores indicate better/healthier choices.
+                            These scores are used to calculate the user's health assessment results.
+                        </span>
+                    </div>
+                )}
+
                 <div className="space-y-2">
                     {formData.options.map((opt, idx) => (
-                        <div key={idx} className="flex gap-2">
+                        <div key={idx} className="flex gap-2 items-center">
+                            <span className="text-xs text-gray-400 w-5">{idx + 1}.</span>
                             <input
                                 type="text"
                                 value={opt}
@@ -132,6 +175,17 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSuccess, initialData, onC
                                 required
                                 className="flex-1 rounded-md border-gray-300 shadow-sm p-2 border"
                             />
+                            {showScores && (
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="10"
+                                    value={formData.optionScores[idx] || 0}
+                                    onChange={(e) => handleScoreChange(idx, e.target.value)}
+                                    className="w-16 rounded-md border-gray-300 shadow-sm p-2 border text-center"
+                                    title="Score (0-10)"
+                                />
+                            )}
                             <button
                                 type="button"
                                 onClick={() => removeOption(idx)}
@@ -153,12 +207,13 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSuccess, initialData, onC
             </div>
 
             <div>
-                <label className="block text-sm font-medium text-gray-700">Order</label>
+                <label className="block text-sm font-medium text-gray-700">Display Order</label>
                 <input
                     type="number"
                     name="order"
                     value={formData.order}
                     onChange={handleChange}
+                    placeholder="Auto-assigned if empty"
                     className="mt-1 block w-24 rounded-md border-gray-300 shadow-sm p-2 border"
                 />
             </div>
@@ -238,93 +293,130 @@ export default function HealthAssessmentPage() {
 
     const questions = questionsByCategory[activeCategory] || [];
 
+    // Calculate total questions stats
+    const totalQuestions = Object.values(questionsByCategory).reduce((sum, q) => sum + q.length, 0);
+    const categoryStats = categories.map(cat => ({
+        name: cat,
+        count: (questionsByCategory[cat] || []).length
+    }));
+
     const tableContent = (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <div className="flex border-b border-gray-200 bg-gray-50">
-                {categories.map(cat => (
-                    <button
-                        key={cat}
-                        onClick={() => setActiveCategory(cat)}
-                        className={`px-6 py-3 text-sm font-medium transition-colors ${activeCategory === cat
-                                ? 'border-b-2 border-primary text-primary bg-white'
-                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                            }`}
-                    >
-                        {cat}
-                    </button>
+        <div className="space-y-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <div className="bg-gradient-to-br from-primary to-primary/80 text-white rounded-lg p-4">
+                    <div className="text-2xl font-bold">{totalQuestions}</div>
+                    <div className="text-sm opacity-80">Total Questions</div>
+                </div>
+                {categoryStats.map(stat => (
+                    <div key={stat.name} className="bg-white border rounded-lg p-4">
+                        <div className="text-xl font-bold text-gray-800">{stat.count}</div>
+                        <div className="text-xs text-gray-500">{stat.name}</div>
+                    </div>
                 ))}
             </div>
 
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                    <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question Text</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Options</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                    {loading ? (
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <div className="flex border-b border-gray-200 bg-gray-50">
+                    {categories.map(cat => (
+                        <button
+                            key={cat}
+                            onClick={() => setActiveCategory(cat)}
+                            className={`px-6 py-3 text-sm font-medium transition-colors ${activeCategory === cat
+                                ? 'border-b-2 border-primary text-primary bg-white'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            {cat}
+                            <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded">
+                                {(questionsByCategory[cat] || []).length}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
                         <tr>
-                            <td colSpan={5} className="text-center py-8 text-gray-500">
-                                <FaSpinner className="animate-spin inline mr-2" /> Loading...
-                            </td>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question Text</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Options & Scores</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
-                    ) : error ? (
-                        <tr>
-                            <td colSpan={5} className="text-center py-8 text-danger">{error}</td>
-                        </tr>
-                    ) : questions.length === 0 ? (
-                        <tr>
-                            <td colSpan={5} className="text-center py-8 text-gray-500">
-                                No questions found for {activeCategory}. Click 'Add New' to create one.
-                            </td>
-                        </tr>
-                    ) : (
-                        questions.map((q) => (
-                            <tr key={q._id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {q.questionNumber}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-900 max-w-sm">
-                                    {q.questionText}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-500">
-                                    <ul className="list-disc list-inside">
-                                        {q.options.map((opt, idx) => (
-                                            <li key={idx} className="truncate max-w-xs">{opt}</li>
-                                        ))}
-                                    </ul>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{q.order}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button
-                                        onClick={() => handleEdit(q)}
-                                        className="text-secondary hover:text-blue-800 mr-3"
-                                    >
-                                        <FaEdit className="inline" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(q._id)}
-                                        className="text-danger hover:text-red-800"
-                                    >
-                                        <FaTrashAlt className="inline" />
-                                    </button>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {loading ? (
+                            <tr>
+                                <td colSpan={5} className="text-center py-8 text-gray-500">
+                                    <FaSpinner className="animate-spin inline mr-2" /> Loading...
                                 </td>
                             </tr>
-                        ))
-                    )}
-                </tbody>
-            </table>
+                        ) : error ? (
+                            <tr>
+                                <td colSpan={5} className="text-center py-8 text-danger">{error}</td>
+                            </tr>
+                        ) : questions.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="text-center py-8 text-gray-500">
+                                    No questions found for {activeCategory}. Click 'Add New' to create one.
+                                </td>
+                            </tr>
+                        ) : (
+                            questions.map((q) => (
+                                <tr key={q._id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {q.questionNumber}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-sm">
+                                        {q.questionText}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-500">
+                                        <div className="space-y-1">
+                                            {q.options.map((opt, idx) => {
+                                                const score = q.optionScores?.[idx] ?? idx;
+                                                return (
+                                                    <div key={idx} className="flex items-center gap-2">
+                                                        <span className="truncate max-w-xs">{opt}</span>
+                                                        <span className={`text-xs px-1.5 py-0.5 rounded ${score >= 3 ? 'bg-green-100 text-green-700' :
+                                                                score >= 2 ? 'bg-yellow-100 text-yellow-700' :
+                                                                    'bg-red-100 text-red-700'
+                                                            }`}>
+                                                            {score}pts
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{q.order}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button
+                                            onClick={() => handleEdit(q)}
+                                            className="text-secondary hover:text-blue-800 mr-3"
+                                        >
+                                            <FaEdit className="inline" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(q._id)}
+                                            className="text-danger hover:text-red-800"
+                                        >
+                                            <FaTrashAlt className="inline" />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 
     return (
         <CrudLayout
             title="Health Assessment"
-            subtitle="Manage assessment questions by category."
+            subtitle="Manage assessment questions and scoring by category. Scores determine user health recommendations."
             onRefresh={fetchQuestions}
             showForm={showForm}
             setShowForm={setShowForm}

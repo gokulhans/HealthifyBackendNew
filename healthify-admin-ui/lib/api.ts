@@ -45,7 +45,7 @@ export async function apiFetch<T>(
         const data = await response.json();
 
         if (!response.ok) {
-            const errorMsg = data.error || response.statusText || 'Unknown API Error';
+            const errorMsg = data.message || data.error || response.statusText || 'Unknown API Error';
             throw new Error(errorMsg);
         }
 

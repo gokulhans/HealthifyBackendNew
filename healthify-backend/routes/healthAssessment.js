@@ -374,6 +374,240 @@ router.post('/answer', protect, async (req, res) => {
 });
 
 /**
+ * @desc    Get assessment results with calculated scores and recommendations
+ * @route   GET /api/health-assessment/results
+ * @access  Private (User)
+ */
+router.get('/results', protect, async (req, res) => {
+    try {
+        const assessment = await HealthAssessment.findOne({ user: req.user.id });
+
+        if (!assessment || assessment.answers.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No assessment found. Please complete the assessment first.'
+            });
+        }
+
+        // Get all questions with their scores
+        const questionIds = assessment.answers.map(a => a.question);
+        const questions = await HealthQuestion.find({ _id: { $in: questionIds } });
+
+        // Create a map of questions for quick lookup
+        const questionMap = {};
+        questions.forEach(q => {
+            questionMap[q._id.toString()] = q;
+        });
+
+        // Calculate scores per category
+        const categoryScores = {
+            Body: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 },
+            Mind: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 },
+            Nutrition: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 },
+            Lifestyle: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 }
+        };
+
+        // Process each answer
+        assessment.answers.forEach(answer => {
+            const question = questionMap[answer.question.toString()];
+            if (!question) return;
+
+            const category = question.category;
+            const optionScores = question.optionScores || [];
+
+            // Get score for selected option (default to index-based scoring if no scores defined)
+            let score = 0;
+            if (optionScores.length > 0 && optionScores[answer.selectedOption] !== undefined) {
+                score = optionScores[answer.selectedOption];
+            } else {
+                // Default scoring: higher index = better score (0-3 scale for 4 options)
+                score = answer.selectedOption;
+            }
+
+            // Max possible score for this question
+            let maxScore = 0;
+            if (optionScores.length > 0) {
+                maxScore = Math.max(...optionScores);
+            } else {
+                maxScore = question.options.length - 1;
+            }
+
+            if (categoryScores[category]) {
+                categoryScores[category].totalScore += score;
+                categoryScores[category].maxScore += maxScore;
+                categoryScores[category].answeredCount += 1;
+            }
+        });
+
+        // Calculate percentages
+        Object.keys(categoryScores).forEach(category => {
+            const cat = categoryScores[category];
+            if (cat.maxScore > 0) {
+                cat.percentage = Math.round((cat.totalScore / cat.maxScore) * 100);
+            }
+        });
+
+        // Calculate overall score
+        const totalScore = Object.values(categoryScores).reduce((sum, cat) => sum + cat.totalScore, 0);
+        const maxScore = Object.values(categoryScores).reduce((sum, cat) => sum + cat.maxScore, 0);
+        const overallPercentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+        // Generate recommendations based on scores
+        const recommendations = generateRecommendations(categoryScores);
+
+        // Determine health level
+        let healthLevel = 'Excellent';
+        if (overallPercentage < 40) healthLevel = 'Needs Improvement';
+        else if (overallPercentage < 60) healthLevel = 'Fair';
+        else if (overallPercentage < 80) healthLevel = 'Good';
+
+        res.json({
+            success: true,
+            data: {
+                overallScore: {
+                    score: totalScore,
+                    maxScore: maxScore,
+                    percentage: overallPercentage,
+                    level: healthLevel
+                },
+                categoryScores: categoryScores,
+                recommendations: recommendations,
+                completedAt: assessment.completedAt,
+                totalQuestionsAnswered: assessment.answers.length
+            }
+        });
+    } catch (error) {
+        console.error('Get assessment results error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+/**
+ * Helper function to generate personalized recommendations
+ */
+function generateRecommendations(categoryScores) {
+    const recommendations = [];
+
+    // Body recommendations
+    const bodyScore = categoryScores.Body.percentage;
+    if (bodyScore < 50) {
+        recommendations.push({
+            category: 'Body',
+            priority: 'high',
+            title: 'Increase Physical Activity',
+            description: 'Consider starting with 15-20 minutes of daily exercise and gradually increase. Walking, swimming, or yoga are great starting points.',
+            icon: 'fitness_center'
+        });
+    } else if (bodyScore < 75) {
+        recommendations.push({
+            category: 'Body',
+            priority: 'medium',
+            title: 'Maintain Your Fitness Routine',
+            description: 'You\'re doing well! Try adding variety to your workouts to target different muscle groups and prevent plateaus.',
+            icon: 'fitness_center'
+        });
+    } else {
+        recommendations.push({
+            category: 'Body',
+            priority: 'low',
+            title: 'Excellent Fitness Level',
+            description: 'Keep up the great work! Consider challenging yourself with advanced exercises or new fitness goals.',
+            icon: 'fitness_center'
+        });
+    }
+
+    // Mind recommendations
+    const mindScore = categoryScores.Mind.percentage;
+    if (mindScore < 50) {
+        recommendations.push({
+            category: 'Mind',
+            priority: 'high',
+            title: 'Focus on Stress Management',
+            description: 'Try incorporating 10 minutes of daily meditation or deep breathing exercises. Consider our guided meditation sessions.',
+            icon: 'psychology'
+        });
+    } else if (mindScore < 75) {
+        recommendations.push({
+            category: 'Mind',
+            priority: 'medium',
+            title: 'Enhance Mental Wellness',
+            description: 'You\'re on the right track! Try exploring different mindfulness techniques or journaling to further reduce stress.',
+            icon: 'psychology'
+        });
+    } else {
+        recommendations.push({
+            category: 'Mind',
+            priority: 'low',
+            title: 'Strong Mental Health',
+            description: 'Your mental wellness practices are excellent! Consider helping others by sharing your techniques.',
+            icon: 'psychology'
+        });
+    }
+
+    // Nutrition recommendations
+    const nutritionScore = categoryScores.Nutrition.percentage;
+    if (nutritionScore < 50) {
+        recommendations.push({
+            category: 'Nutrition',
+            priority: 'high',
+            title: 'Improve Eating Habits',
+            description: 'Focus on regular meal times and include more fruits and vegetables. Start with small changes like adding one healthy meal per day.',
+            icon: 'restaurant'
+        });
+    } else if (nutritionScore < 75) {
+        recommendations.push({
+            category: 'Nutrition',
+            priority: 'medium',
+            title: 'Optimize Your Diet',
+            description: 'Good nutrition habits! Try meal planning to ensure balanced nutrition throughout the week.',
+            icon: 'restaurant'
+        });
+    } else {
+        recommendations.push({
+            category: 'Nutrition',
+            priority: 'low',
+            title: 'Excellent Nutrition',
+            description: 'Your diet is well-balanced! Consider exploring new healthy recipes to keep things interesting.',
+            icon: 'restaurant'
+        });
+    }
+
+    // Lifestyle recommendations
+    const lifestyleScore = categoryScores.Lifestyle.percentage;
+    if (lifestyleScore < 50) {
+        recommendations.push({
+            category: 'Lifestyle',
+            priority: 'high',
+            title: 'Improve Sleep & Habits',
+            description: 'Aim for 7-8 hours of sleep. Establish a bedtime routine and limit screen time before bed. Consider reducing harmful habits gradually.',
+            icon: 'bedtime'
+        });
+    } else if (lifestyleScore < 75) {
+        recommendations.push({
+            category: 'Lifestyle',
+            priority: 'medium',
+            title: 'Fine-tune Your Lifestyle',
+            description: 'You have good habits! Focus on consistency and consider adding relaxation time to your daily schedule.',
+            icon: 'bedtime'
+        });
+    } else {
+        recommendations.push({
+            category: 'Lifestyle',
+            priority: 'low',
+            title: 'Healthy Lifestyle',
+            description: 'Your lifestyle choices are excellent! Maintain your healthy habits and inspire others around you.',
+            icon: 'bedtime'
+        });
+    }
+
+    // Sort by priority
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+    return recommendations;
+}
+
+/**
  * @desc    Reset assessment (start over)
  * @route   DELETE /api/health-assessment/reset
  * @access  Private (User)
@@ -436,4 +670,173 @@ router.post('/seed', protect, isAdmin, async (req, res) => {
     }
 });
 
+// ============================================
+// ADMIN: User Assessment Management
+// ============================================
+
+/**
+ * @desc    Get all user assessments with scores (Admin only)
+ * @route   GET /api/health-assessment/admin/assessments
+ * @access  Private (Admin)
+ */
+router.get('/admin/assessments', protect, isAdmin, async (req, res) => {
+    try {
+        const { page = 1, limit = 20, completed } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        // Build query
+        const query = {};
+        if (completed === 'true') query.isComplete = true;
+        if (completed === 'false') query.isComplete = false;
+
+        const assessments = await HealthAssessment.find(query)
+            .populate('user', 'name email')
+            .sort({ updatedAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await HealthAssessment.countDocuments(query);
+
+        // Get all questions for score calculation
+        const questions = await HealthQuestion.find({ isActive: true });
+        const questionMap = {};
+        questions.forEach(q => {
+            questionMap[q._id.toString()] = q;
+        });
+
+        // Calculate scores for each assessment
+        const assessmentsWithScores = assessments.map(assessment => {
+            const categoryScores = {
+                Body: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 },
+                Mind: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 },
+                Nutrition: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 },
+                Lifestyle: { totalScore: 0, maxScore: 0, answeredCount: 0, percentage: 0 }
+            };
+
+            assessment.answers.forEach(answer => {
+                const question = questionMap[answer.question.toString()];
+                if (!question) return;
+
+                const category = question.category;
+                const optionScores = question.optionScores || [];
+
+                let score = 0;
+                if (optionScores.length > 0 && optionScores[answer.selectedOption] !== undefined) {
+                    score = optionScores[answer.selectedOption];
+                } else {
+                    score = answer.selectedOption;
+                }
+
+                let maxScore = 0;
+                if (optionScores.length > 0) {
+                    maxScore = Math.max(...optionScores);
+                } else {
+                    maxScore = question.options.length - 1;
+                }
+
+                if (categoryScores[category]) {
+                    categoryScores[category].totalScore += score;
+                    categoryScores[category].maxScore += maxScore;
+                    categoryScores[category].answeredCount += 1;
+                }
+            });
+
+            // Calculate percentages
+            Object.keys(categoryScores).forEach(category => {
+                const cat = categoryScores[category];
+                if (cat.maxScore > 0) {
+                    cat.percentage = Math.round((cat.totalScore / cat.maxScore) * 100);
+                }
+            });
+
+            const totalScore = Object.values(categoryScores).reduce((sum, cat) => sum + cat.totalScore, 0);
+            const maxScore = Object.values(categoryScores).reduce((sum, cat) => sum + cat.maxScore, 0);
+            const overallPercentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+            let healthLevel = 'Excellent';
+            if (overallPercentage < 40) healthLevel = 'Needs Improvement';
+            else if (overallPercentage < 60) healthLevel = 'Fair';
+            else if (overallPercentage < 80) healthLevel = 'Good';
+
+            return {
+                _id: assessment._id,
+                user: assessment.user,
+                overallScore: {
+                    percentage: overallPercentage,
+                    level: healthLevel
+                },
+                categoryScores,
+                answeredCount: assessment.answers.length,
+                isComplete: assessment.isComplete,
+                completedAt: assessment.completedAt,
+                createdAt: assessment.createdAt,
+                updatedAt: assessment.updatedAt
+            };
+        });
+
+        res.json({
+            success: true,
+            data: assessmentsWithScores,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
+    } catch (error) {
+        console.error('Get admin assessments error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+/**
+ * @desc    Get assessment statistics (Admin only)
+ * @route   GET /api/health-assessment/admin/stats
+ * @access  Private (Admin)
+ */
+router.get('/admin/stats', protect, isAdmin, async (req, res) => {
+    try {
+        const totalAssessments = await HealthAssessment.countDocuments();
+        const completedAssessments = await HealthAssessment.countDocuments({ isComplete: true });
+        const inProgressAssessments = await HealthAssessment.countDocuments({ isComplete: false });
+        const totalQuestions = await HealthQuestion.countDocuments({ isActive: true });
+
+        // Get assessments from the last 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const recentAssessments = await HealthAssessment.countDocuments({
+            createdAt: { $gte: sevenDaysAgo }
+        });
+
+        // Questions per category
+        const questionsByCategory = await HealthQuestion.aggregate([
+            { $match: { isActive: true } },
+            { $group: { _id: '$category', count: { $sum: 1 } } }
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                totalAssessments,
+                completedAssessments,
+                inProgressAssessments,
+                completionRate: totalAssessments > 0
+                    ? Math.round((completedAssessments / totalAssessments) * 100)
+                    : 0,
+                totalQuestions,
+                recentAssessments,
+                questionsByCategory: questionsByCategory.reduce((acc, item) => {
+                    acc[item._id] = item.count;
+                    return acc;
+                }, {})
+            }
+        });
+    } catch (error) {
+        console.error('Get assessment stats error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
 module.exports = router;
+

@@ -166,6 +166,17 @@ const workoutSessionSchema = new mongoose.Schema({
         max: 5
     },
 
+    // Quick workout support
+    isQuickWorkout: {
+        type: Boolean,
+        default: false
+    },
+    quickWorkoutType: {
+        type: String,
+        enum: ['warmup', 'fullbody', 'core', 'hiit', null],
+        default: null
+    },
+
     createdAt: {
         type: Date,
         default: Date.now

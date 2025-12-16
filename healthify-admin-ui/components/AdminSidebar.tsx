@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaUserShield, FaChartBar, FaRunning, FaDumbbell, FaEnvelopeOpenText, FaLeaf, FaPills, FaClock, FaQuestionCircle, FaList, FaCalendarAlt, FaHeartbeat } from 'react-icons/fa';
+import { FaUserShield, FaChartBar, FaRunning, FaDumbbell, FaEnvelopeOpenText, FaLeaf, FaPills, FaClock, FaQuestionCircle, FaList, FaCalendarAlt, FaHeartbeat, FaClipboardList } from 'react-icons/fa';
 import { useAuth } from './AuthProvider'; // Use the local AuthProvider
 
 interface NavItem {
@@ -24,7 +24,9 @@ const navItems: NavItem[] = [
   // { name: 'Medicine Reminders', href: '/medicine-reminders', icon: FaClock }, // Keeping this link simple for now
   { name: 'Questions', href: '/questions', icon: FaQuestionCircle },
   { name: 'Health Assessment', href: '/health-assessment', icon: FaHeartbeat },
+  { name: 'User Responses', href: '/user-responses', icon: FaClipboardList },
 ];
+
 
 export const AdminSidebar = () => {
   const pathname = usePathname();
