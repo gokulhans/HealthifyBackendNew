@@ -64,23 +64,31 @@ router.post('/start', protect, async (req, res) => {
             sessionData.programDayTitle = dayData.title || `Day ${day}`;
             title = `${program.name} - ${dayData.title || `Day ${day}`}`;
 
-            // Map exercises with order
-            exercises = dayData.exercises.map((ex, index) => ({
-                exercise: ex.exercise._id,
-                targetReps: ex.reps,
-                targetSets: ex.sets,
-                completedReps: 0,
-                completedSets: 0,
-                duration: 0,
-                restTime: 0,
-                status: 'pending',
-                order: index
-            }));
+            // Map exercises with order - filter out any null exercises (deleted from DB)
+            exercises = dayData.exercises
+                .filter(ex => ex.exercise && ex.exercise._id)
+                .map((ex, index) => ({
+                    exercise: ex.exercise._id,
+                    targetReps: ex.reps,
+                    targetSets: ex.sets,
+                    completedReps: 0,
+                    completedSets: 0,
+                    duration: ex.duration || 0,
+                    restTime: 0,
+                    status: 'pending',
+                    order: index
+                }));
         }
         // TODO: Support standalone workout
 
+        // Debug logging
+        console.log(`Start workout - Day ${day}, exercises to start: ${exercises.length}`);
+
         if (exercises.length === 0) {
-            return res.status(400).json({ success: false, message: 'No exercises to start' });
+            return res.status(400).json({
+                success: false,
+                message: `No exercises found for Day ${day}. Please add exercises to this day in the admin panel.`
+            });
         }
 
         // Check if user already has an active session today
