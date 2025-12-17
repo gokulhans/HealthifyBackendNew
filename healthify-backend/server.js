@@ -1,4 +1,4 @@
-﻿/* server.js (minimal) */
+/* server.js (minimal) */
 require('dotenv').config({ path: '.env.local' });
 const express = require('express');
 const rateLimit = require('express-rate-limit');
