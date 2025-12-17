@@ -483,6 +483,209 @@ router.get('/results', protect, async (req, res) => {
 });
 
 /**
+ * @desc    Get assessment results for a specific category
+ * @route   GET /api/health-assessment/results/category/:category
+ * @access  Private (User)
+ */
+router.get('/results/category/:category', protect, async (req, res) => {
+    try {
+        const validCategories = ['Body', 'Mind', 'Nutrition', 'Lifestyle'];
+        const category = req.params.category;
+
+        if (!validCategories.includes(category)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid category. Must be one of: Body, Mind, Nutrition, Lifestyle'
+            });
+        }
+
+        const assessment = await HealthAssessment.findOne({ user: req.user.id });
+
+        if (!assessment || assessment.answers.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No assessment found. Please complete the assessment first.'
+            });
+        }
+
+        // Get all questions for this category with their scores
+        const questionIds = assessment.answers.map(a => a.question);
+        const questions = await HealthQuestion.find({
+            _id: { $in: questionIds },
+            category: category
+        });
+
+        if (questions.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `No answers found for ${category} category.`
+            });
+        }
+
+        // Create a map of questions for quick lookup
+        const questionMap = {};
+        questions.forEach(q => {
+            questionMap[q._id.toString()] = q;
+        });
+
+        // Calculate score for this category
+        let totalScore = 0;
+        let maxScore = 0;
+        let answeredCount = 0;
+
+        // Process each answer for this category
+        assessment.answers.forEach(answer => {
+            const question = questionMap[answer.question.toString()];
+            if (!question) return;
+
+            const optionScores = question.optionScores || [];
+
+            // Get score for selected option
+            let score = 0;
+            if (optionScores.length > 0 && optionScores[answer.selectedOption] !== undefined) {
+                score = optionScores[answer.selectedOption];
+            } else {
+                score = answer.selectedOption;
+            }
+
+            // Max possible score for this question
+            let questionMaxScore = 0;
+            if (optionScores.length > 0) {
+                questionMaxScore = Math.max(...optionScores);
+            } else {
+                questionMaxScore = question.options.length - 1;
+            }
+
+            totalScore += score;
+            maxScore += questionMaxScore;
+            answeredCount += 1;
+        });
+
+        const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+        // Generate recommendation for this category
+        const recommendation = generateCategoryRecommendation(category, percentage);
+
+        // Determine level
+        let level = 'Excellent';
+        if (percentage < 40) level = 'Needs Improvement';
+        else if (percentage < 60) level = 'Fair';
+        else if (percentage < 80) level = 'Good';
+
+        res.json({
+            success: true,
+            data: {
+                category,
+                score: {
+                    totalScore,
+                    maxScore,
+                    percentage,
+                    level,
+                    answeredCount
+                },
+                recommendation
+            }
+        });
+    } catch (error) {
+        console.error('Get category results error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+/**
+ * Helper function to generate recommendation for a specific category
+ */
+function generateCategoryRecommendation(category, percentage) {
+    const recommendations = {
+        Body: {
+            low: {
+                priority: 'high',
+                title: 'Increase Physical Activity',
+                description: 'Consider starting with 15-20 minutes of daily exercise and gradually increase. Walking, swimming, or yoga are great starting points.'
+            },
+            medium: {
+                priority: 'medium',
+                title: 'Maintain Your Fitness Routine',
+                description: 'You\'re doing well! Try adding variety to your workouts to target different muscle groups and prevent plateaus.'
+            },
+            high: {
+                priority: 'low',
+                title: 'Excellent Fitness Level',
+                description: 'Keep up the great work! Consider challenging yourself with advanced exercises or new fitness goals.'
+            }
+        },
+        Mind: {
+            low: {
+                priority: 'high',
+                title: 'Focus on Stress Management',
+                description: 'Try incorporating 10 minutes of daily meditation or deep breathing exercises. Consider our guided meditation sessions.'
+            },
+            medium: {
+                priority: 'medium',
+                title: 'Enhance Mental Wellness',
+                description: 'You\'re on the right track! Try exploring different mindfulness techniques or journaling to further reduce stress.'
+            },
+            high: {
+                priority: 'low',
+                title: 'Strong Mental Health',
+                description: 'Your mental wellness practices are excellent! Consider helping others by sharing your techniques.'
+            }
+        },
+        Nutrition: {
+            low: {
+                priority: 'high',
+                title: 'Improve Eating Habits',
+                description: 'Focus on regular meal times and include more fruits and vegetables. Start with small changes like adding one healthy meal per day.'
+            },
+            medium: {
+                priority: 'medium',
+                title: 'Optimize Your Diet',
+                description: 'Good nutrition habits! Try meal planning to ensure balanced nutrition throughout the week.'
+            },
+            high: {
+                priority: 'low',
+                title: 'Excellent Nutrition',
+                description: 'Your diet is well-balanced! Consider exploring new healthy recipes to keep things interesting.'
+            }
+        },
+        Lifestyle: {
+            low: {
+                priority: 'high',
+                title: 'Improve Sleep & Habits',
+                description: 'Aim for 7-8 hours of sleep. Establish a bedtime routine and limit screen time before bed.'
+            },
+            medium: {
+                priority: 'medium',
+                title: 'Fine-tune Your Lifestyle',
+                description: 'You have good habits! Focus on consistency and consider adding relaxation time to your daily schedule.'
+            },
+            high: {
+                priority: 'low',
+                title: 'Healthy Lifestyle',
+                description: 'Your lifestyle choices are excellent! Maintain your healthy habits and inspire others around you.'
+            }
+        }
+    };
+
+    const level = percentage < 50 ? 'low' : percentage < 75 ? 'medium' : 'high';
+    return {
+        category,
+        icon: getCategoryIcon(category),
+        ...recommendations[category][level]
+    };
+}
+
+function getCategoryIcon(category) {
+    switch (category) {
+        case 'Body': return 'fitness_center';
+        case 'Mind': return 'psychology';
+        case 'Nutrition': return 'restaurant';
+        case 'Lifestyle': return 'bedtime';
+        default: return 'info';
+    }
+}
+
+/**
  * Helper function to generate personalized recommendations
  */
 function generateRecommendations(categoryScores) {
