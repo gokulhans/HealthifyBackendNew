@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const WorkoutSession = require('../models/workoutSession');
 const ExerciseBundle = require('../models/exerciseBundle');
 const Exercise = require('../models/exercise');
+const Workout = require('../models/workout');
 const { protect } = require('../middleware/auth');
 
 /**
@@ -86,7 +87,7 @@ router.post('/log-exercise', protect, async (req, res) => {
  */
 router.post('/start', protect, async (req, res) => {
     try {
-        const { programId, day, workoutId } = req.body || {};
+        const { programId, day, workoutId, exerciseId } = req.body || {};
 
         let exercises = [];
         let title = 'Workout Session';
@@ -138,30 +139,83 @@ router.post('/start', protect, async (req, res) => {
                     status: 'pending',
                     order: index
                 }));
+        } else if (workoutId) {
+            if (!mongoose.Types.ObjectId.isValid(workoutId)) {
+                return res.status(400).json({ success: false, message: 'Invalid workout ID' });
+            }
+
+            const workout = await Workout.findById(workoutId)
+                .populate('exercises', 'title slug image gif video difficulty duration description equipment');
+
+            if (!workout) {
+                return res.status(404).json({ success: false, message: 'Workout not found' });
+            }
+
+            sessionData.workout = workoutId;
+            title = workout.name;
+
+            exercises = workout.exercises
+                .filter(ex => ex && ex._id)
+                .map((ex, index) => ({
+                    exercise: ex._id,
+                    targetReps: 10, // Default for standalone
+                    targetSets: 3,  // Default for standalone
+                    completedReps: 0,
+                    completedSets: 0,
+                    duration: ex.duration || 0,
+                    restTime: 0,
+                    status: 'pending',
+                    order: index
+                }));
+        } else if (exerciseId) {
+            if (!mongoose.Types.ObjectId.isValid(exerciseId)) {
+                return res.status(400).json({ success: false, message: 'Invalid exercise ID' });
+            }
+
+            const exercise = await Exercise.findById(exerciseId);
+
+            if (!exercise) {
+                return res.status(404).json({ success: false, message: 'Exercise not found' });
+            }
+
+            title = exercise.title;
+            sessionData.isQuickWorkout = true;
+
+            exercises = [{
+                exercise: exercise._id,
+                targetReps: 10,
+                targetSets: 3,
+                completedReps: 0,
+                completedSets: 0,
+                duration: exercise.duration || 0,
+                restTime: 0,
+                status: 'pending',
+                order: 0
+            }];
         }
-        // TODO: Support standalone workout
 
         // Debug logging
-        console.log(`Start workout - Day ${day}, exercises to start: ${exercises.length}`);
+        console.log('=== Start Workout Request ===');
+        console.log('Body:', JSON.stringify(req.body, null, 2));
+        console.log('Exercises to start:', exercises.length);
 
         if (exercises.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: `No exercises found for Day ${day}. Please add exercises to this day in the admin panel.`
+                message: 'No exercises found to start. Please provide programId/day, workoutId, or exerciseId.'
             });
         }
 
-        // Check if user already has an active session today
+        // Check if user already has any active session
         const existingActive = await WorkoutSession.findOne({
             user: req.user.id,
-            date: getTodayDate(),
             status: { $in: ['in_progress', 'paused'] }
         });
 
         if (existingActive) {
             return res.status(400).json({
                 success: false,
-                message: 'You already have an active workout session',
+                message: 'You already have an active workout session. Please complete or abandon it first.',
                 data: { sessionId: existingActive._id }
             });
         }
@@ -207,6 +261,7 @@ router.get('/current', protect, async (req, res) => {
             user: req.user.id,
             status: { $in: ['in_progress', 'paused'] }
         })
+            .sort({ date: -1, startedAt: -1 })
             .populate('exercises.exercise', 'title slug image gif video difficulty duration description equipment')
             .populate('program', 'name slug thumbnail');
 

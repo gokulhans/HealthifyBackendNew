@@ -20,6 +20,7 @@ const waterRoutes = require('./routes/water');
 const userMedicinesRoutes = require('./routes/userMedicines');
 const exerciseBundlesRoutes = require('./routes/exerciseBundles');
 const workoutProgressRoutes = require('./routes/workoutProgress');
+const mealsRoutes = require('./routes/meals');
 const healthMetricsRoutes = require('./routes/healthMetrics');
 const migrationRoutes = require('./routes/migration');
 
@@ -75,6 +76,7 @@ app.use('/api/water', waterRoutes);
 app.use('/api/user-medicines', userMedicinesRoutes);
 app.use('/api/exercise-bundles', exerciseBundlesRoutes);
 app.use('/api/workout-progress', workoutProgressRoutes);
+app.use('/api/meals', mealsRoutes);
 app.use('/api/health-metrics', healthMetricsRoutes);
 app.use('/api/health-assessment', require('./routes/healthAssessment'));
 app.use('/api/migration', migrationRoutes);

@@ -79,7 +79,6 @@ router.get('/:id', async (req, res) => {
 router.post('/', protect, isAdmin, async (req, res) => {
   try {
     const { title, description, type, image, calories, prepTime, ingredients, instructions } = req.body || {};
-    const { title, description, type, image, calories, prepTime, ingredients, instructions } = req.body || {};
     if (!title) return res.status(400).json({ message: 'Title required' });
 
     const exists = await Nutrition.findOne({ title: title.trim() });
