@@ -21,6 +21,7 @@ const userMedicinesRoutes = require('./routes/userMedicines');
 const exerciseBundlesRoutes = require('./routes/exerciseBundles');
 const workoutProgressRoutes = require('./routes/workoutProgress');
 const healthMetricsRoutes = require('./routes/healthMetrics');
+const migrationRoutes = require('./routes/migration');
 
 const app = express();
 
@@ -31,19 +32,28 @@ app.use(express.urlencoded({ extended: true }));
 const allowedOrigins = [
   'http://localhost:3000', // admin UI
   'http://localhost:3001', // possible user UI dev port
-  'http://localhost:3002', // alternative user UI dev port
+  'http://localhost:3002', // alternative user UI dev port / old admin
+  'http://localhost:3003', // old admin panel (if running on different port)
   'https://healthify-admin-pearl.vercel.app',
+  'https://healthify-app-admin.vercel.app',
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow non-browser clients
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('Origin not allowed by CORS:', origin);
+      callback(null, false);
     }
-    return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
 }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use(express.static('public'));
@@ -67,6 +77,7 @@ app.use('/api/exercise-bundles', exerciseBundlesRoutes);
 app.use('/api/workout-progress', workoutProgressRoutes);
 app.use('/api/health-metrics', healthMetricsRoutes);
 app.use('/api/health-assessment', require('./routes/healthAssessment'));
+app.use('/api/migration', migrationRoutes);
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 4000;

@@ -104,7 +104,7 @@ router.post('/start', protect, async (req, res) => {
             }
 
             const program = await ExerciseBundle.findById(programId)
-                .populate('schedule.exercises.exercise', 'title slug image video difficulty duration description equipment');
+                .populate('schedule.exercises.exercise', 'title slug image gif video difficulty duration description equipment');
 
             if (!program) {
                 return res.status(404).json({ success: false, message: 'Program not found' });
@@ -124,27 +124,31 @@ router.post('/start', protect, async (req, res) => {
             sessionData.programDayTitle = dayData.title || `Day ${day}`;
             title = `${program.name} - ${dayData.title || `Day ${day}`}`;
 
-            // Map exercises with order - filter out null/deleted exercises
+            // Map exercises with order - filter out any null exercises (deleted from DB)
             exercises = dayData.exercises
-                .filter(ex => ex.exercise != null)
+                .filter(ex => ex.exercise && ex.exercise._id)
                 .map((ex, index) => ({
                     exercise: ex.exercise._id,
                     targetReps: ex.reps,
                     targetSets: ex.sets,
                     completedReps: 0,
                     completedSets: 0,
-                    duration: 0,
+                    duration: ex.duration || 0,
                     restTime: 0,
                     status: 'pending',
                     order: index
                 }));
-
-            console.log(`Day ${day} exercises: ${dayData.exercises.length}, valid: ${exercises.length}`);
         }
         // TODO: Support standalone workout
 
+        // Debug logging
+        console.log(`Start workout - Day ${day}, exercises to start: ${exercises.length}`);
+
         if (exercises.length === 0) {
-            return res.status(400).json({ success: false, message: 'No exercises to start' });
+            return res.status(400).json({
+                success: false,
+                message: `No exercises found for Day ${day}. Please add exercises to this day in the admin panel.`
+            });
         }
 
         // Check if user already has an active session today
@@ -175,7 +179,7 @@ router.post('/start', protect, async (req, res) => {
         await session.save();
 
         // Populate exercises for response
-        await session.populate('exercises.exercise', 'title slug image video difficulty duration description equipment');
+        await session.populate('exercises.exercise', 'title slug image gif video difficulty duration description equipment');
 
         res.status(201).json({
             success: true,
@@ -203,7 +207,7 @@ router.get('/current', protect, async (req, res) => {
             user: req.user.id,
             status: { $in: ['in_progress', 'paused'] }
         })
-            .populate('exercises.exercise', 'title slug image video difficulty duration description equipment')
+            .populate('exercises.exercise', 'title slug image gif video difficulty duration description equipment')
             .populate('program', 'name slug thumbnail');
 
         console.log('Session found:', session ? 'Yes' : 'No');
@@ -242,7 +246,7 @@ router.get('/session/:id', protect, async (req, res) => {
             _id: req.params.id,
             user: req.user.id
         })
-            .populate('exercises.exercise', 'title slug image video difficulty duration description equipment')
+            .populate('exercises.exercise', 'title slug image gif video difficulty duration description equipment')
             .populate('program', 'name slug thumbnail');
 
         if (!session) {
@@ -273,7 +277,7 @@ router.get('/session/:id/current-exercise', protect, async (req, res) => {
         const session = await WorkoutSession.findOne({
             _id: req.params.id,
             user: req.user.id
-        }).populate('exercises.exercise', 'title slug image video difficulty duration description equipment');
+        }).populate('exercises.exercise', 'title slug image gif video difficulty duration description equipment');
 
         if (!session) {
             return res.status(404).json({ success: false, message: 'Session not found' });

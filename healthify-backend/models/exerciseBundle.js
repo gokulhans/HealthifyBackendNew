@@ -131,9 +131,10 @@ exerciseBundleSchema.pre('validate', function (next) {
 // Virtual for total exercises count
 exerciseBundleSchema.virtual('totalExercises').get(function () {
     let count = 0;
+    if (!this.schedule || !Array.isArray(this.schedule)) return 0;
     for (const day of this.schedule) {
         if (!day.isRestDay) {
-            count += day.exercises.length;
+            count += day.exercises?.length || 0;
         }
     }
     return count;
@@ -141,6 +142,7 @@ exerciseBundleSchema.virtual('totalExercises').get(function () {
 
 // Virtual for rest days count
 exerciseBundleSchema.virtual('restDays').get(function () {
+    if (!this.schedule || !Array.isArray(this.schedule)) return 0;
     return this.schedule.filter(d => d.isRestDay).length;
 });
 

@@ -8,6 +8,7 @@ const nutritionSchema = new mongoose.Schema({
   type: { type: String, enum: ['Recipe', 'Plan', 'Tip'], default: 'Recipe' },
   image: { type: String, default: '' },
   calories: { type: Number, default: 0 },
+  prepTime: { type: Number, default: 0 },
   prepTime: { type: Number, default: 0 }, // Preparation time in minutes
   ingredients: { type: [String], default: [] },
   instructions: { type: String, default: '' },

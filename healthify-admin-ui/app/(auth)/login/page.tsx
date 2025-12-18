@@ -6,15 +6,15 @@ import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('admin@healthify.com');
-    const [password, setPassword] = useState('Admin@1234');
+    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { login, isLoggedIn } = useAuth();
     const router = useRouter();
 
     if (isLoggedIn) {
-      router.push('/dashboard');
-      return null;
+        router.push('/dashboard');
+        return null;
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -43,6 +43,7 @@ export default function LoginPage() {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
+                            autoComplete="email"
                             className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
                         />
                     </div>
@@ -53,6 +54,7 @@ export default function LoginPage() {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
+                            autoComplete="current-password"
                             className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
                         />
                     </div>
